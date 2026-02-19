@@ -1,30 +1,31 @@
-import { PrismaClient } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const prisma = new PrismaClient();
+dotenv.config();
+
+const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 async function main() {
-    const user = await prisma.user.upsert({
-        where: { firebaseId: 'demo-user-123' },
-        update: {},
-        create: {
-            firebaseId: 'demo-user-123',
+    const { data: user, error } = await supabaseAdmin
+        .from('users')
+        .upsert({
+            id: 'demo-user-123',
             email: 'priya@example.com',
             name: 'Priya',
-            role: 'ENTREPRENEUR',
             industry: 'Textiles',
-            location: 'Coimbatore',
-            growthScore: 78,
-        },
-    });
+            language: 'en'
+        }, { onConflict: 'id' })
+        .select()
+        .single();
 
-    console.log('Seeded User:', user);
+    if (error) {
+        console.error('Seeding Error:', error);
+    } else {
+        console.log('Seeded User:', user);
+    }
 }
 
-main()
-    .catch((e) => {
-        console.error(e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+main();

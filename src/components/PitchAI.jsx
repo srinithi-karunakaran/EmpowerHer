@@ -3,6 +3,7 @@ import { Rocket, FileText, Download, CheckCircle2, ChevronRight, AlertCircle, In
 import { motion, AnimatePresence } from 'framer-motion';
 import { analyzePitchApi } from '../utils/api';
 import { useAuth } from '../utils/AuthContext';
+import { supabase } from '../utils/supabaseClient';
 
 const PitchAI = ({ onBack }) => {
     const { user } = useAuth();
@@ -17,9 +18,23 @@ const PitchAI = ({ onBack }) => {
         setIsAnalyzing(true);
         setError(null);
         try {
-            const result = await analyzePitchApi(pitch, user?.firebaseId || user?.uid);
+            const result = await analyzePitchApi(pitch, user?.id);
             setAnalysisResult(result);
             setActiveTab('summary');
+
+            // Save to Supabase ai_conversations
+            if (user) {
+                const { error: dbError } = await supabase
+                    .from('ai_conversations')
+                    .insert([
+                        {
+                            user_id: user.id,
+                            question: pitch,
+                            answer: JSON.stringify(result)
+                        }
+                    ]);
+                if (dbError) console.error("Error saving conversation:", dbError);
+            }
         } catch (err) {
             console.error(err);
             setError("AI service is busy. Please try again later.");

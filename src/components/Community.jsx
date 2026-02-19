@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Users, MessageSquare, Video, Star, MapPin, Zap, ArrowRight, Heart, Share2, Send, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import socket from '../utils/socket';
+import { useAuth } from '../utils/AuthContext';
+import { supabase } from '../utils/supabaseClient';
 
 const Community = ({ onBack }) => {
     const [matching, setMatching] = useState(false);
@@ -10,20 +11,41 @@ const Community = ({ onBack }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
 
+    const { user } = useAuth();
+    const [posts, setPosts] = useState([]);
+    const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+
     useEffect(() => {
-        if (activeRoom) {
-            socket.emit('join_room', activeRoom.title);
+        fetchPosts();
 
-            const receiveHandler = (data) => {
-                if (data.room === activeRoom.title) {
-                    setMessages(prev => [...prev, data]);
-                }
-            };
+        // Subscribe to new posts
+        const postsSubscription = supabase
+            .channel('public:community_posts')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_posts' }, payload => {
+                setPosts(prev => [payload.new, ...prev]);
+            })
+            .subscribe();
 
-            socket.on('receive_message', receiveHandler);
-            return () => socket.off('receive_message', receiveHandler);
-        }
-    }, [activeRoom]);
+        return () => {
+            supabase.removeChannel(postsSubscription);
+        };
+    }, []);
+
+    const fetchPosts = async () => {
+        setIsLoadingPosts(true);
+        const { data, error } = await supabase
+            .from('community_posts')
+            .select(`
+                *,
+                users (
+                    name
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        if (data) setPosts(data);
+        setIsLoadingPosts(false);
+    };
 
     const handleMatch = () => {
         setMatching(true);
@@ -40,19 +62,20 @@ const Community = ({ onBack }) => {
         }, 2000);
     };
 
-    const handleSendMessage = (e) => {
+    const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
+        if (!newMessage.trim() || !user) return;
 
-        const msgData = {
-            room: activeRoom.title,
-            user: "You",
-            text: newMessage,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
+        const { error } = await supabase
+            .from('community_posts')
+            .insert([
+                {
+                    user_id: user.id,
+                    content: newMessage
+                }
+            ]);
 
-        socket.emit('send_message', msgData);
-        setMessages(prev => [...prev, msgData]);
+        if (error) console.error("Error posting message:", error);
         setNewMessage("");
     };
 
@@ -109,21 +132,26 @@ const Community = ({ onBack }) => {
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                    {messages.length === 0 && (
+                                    {isLoadingPosts ? (
+                                        <div className="h-full flex items-center justify-center">
+                                            <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                                        </div>
+                                    ) : posts.length === 0 ? (
                                         <div className="h-full flex flex-col items-center justify-center text-muted-text">
                                             <MessageSquare size={48} className="mb-4 opacity-20" />
                                             <p className="text-sm">Start the conversation in {activeRoom.title}</p>
                                         </div>
-                                    )}
-                                    {messages.map((msg, i) => (
-                                        <div key={i} className={`flex flex-col ${msg.user === 'You' ? 'items-end' : 'items-start'}`}>
-                                            <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${msg.user === 'You' ? 'bg-primary text-white rounded-br-none' : 'bg-white/5 text-dark-text rounded-bl-none border border-white/5'}`}>
-                                                <p className="font-bold text-[10px] mb-1 opacity-80">{msg.user}</p>
-                                                <p>{msg.text}</p>
+                                    ) : (
+                                        posts.map((post, i) => (
+                                            <div key={post.id || i} className={`flex flex-col ${post.user_id === user?.id ? 'items-end' : 'items-start'}`}>
+                                                <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${post.user_id === user?.id ? 'bg-primary text-white rounded-br-none' : 'bg-white/5 text-dark-text rounded-bl-none border border-white/5'}`}>
+                                                    <p className="font-bold text-[10px] mb-1 opacity-80">{post.users?.name || 'User'}</p>
+                                                    <p>{post.content}</p>
+                                                </div>
+                                                <span className="text-[10px] text-muted-text mt-1">{new Date(post.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
-                                            <span className="text-[10px] text-muted-text mt-1">{msg.time}</span>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
 
                                 <form onSubmit={handleSendMessage} className="p-6 border-t border-white/5 flex gap-3">

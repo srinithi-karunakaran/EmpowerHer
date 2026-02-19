@@ -17,7 +17,7 @@ const Login = ({ onSwitchToSignup }) => {
         try {
             await login(email, password);
         } catch (err) {
-            alert("Login failed. Please check your credentials.");
+            alert(err.message || "Login failed. Please check your credentials.");
         } finally {
             setIsLoading(false);
         }

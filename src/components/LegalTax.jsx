@@ -22,7 +22,7 @@ const LegalTax = ({ onBack }) => {
         try {
             const formData = new FormData();
             formData.append('receipt', file);
-            formData.append('firebaseId', user?.firebaseId || user?.uid);
+            formData.append('userId', user?.id);
 
             const result = await scanReceiptApi(formData);
 

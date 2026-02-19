@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import prisma from '../lib/prisma.js';
+import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 dotenv.config();
 
@@ -9,7 +9,7 @@ const openai = new OpenAI({
 });
 
 export const analyzePitch = async (req, res) => {
-    const { pitchText, firebaseId } = req.body;
+    const { pitchText, userId } = req.body;
 
     if (!pitchText) {
         return res.status(400).json({ error: "Pitch text is required" });
@@ -20,7 +20,7 @@ export const analyzePitch = async (req, res) => {
 
         if (process.env.OPENAI_API_KEY === 'mock_key' || !process.env.OPENAI_API_KEY) {
             // SIMULATION MODE
-            result = await simulateAdvancedAnalysis(pitchText, firebaseId);
+            result = await simulateAdvancedAnalysis(pitchText, userId);
         } else {
             // REAL GPT-4o MODE
             const completion = await openai.chat.completions.create({
@@ -48,37 +48,41 @@ export const analyzePitch = async (req, res) => {
         }
 
         // Persist to DB if user is logged in
-        if (firebaseId) {
-            const user = await prisma.user.findUnique({ where: { firebaseId } });
-            if (user) {
-                await prisma.pitch.create({
-                    data: {
-                        userId: user.id,
-                        content: pitchText,
-                        score: result.score,
-                        analysis: result
+        if (userId) {
+            const { error: dbError } = await supabaseAdmin
+                .from('ai_conversations')
+                .insert([
+                    {
+                        user_id: userId,
+                        question: pitchText,
+                        answer: JSON.stringify(result)
                     }
-                });
-            }
+                ]);
+            if (dbError) console.error("Error saving conversation:", dbError);
         }
 
         res.json(result);
     } catch (error) {
         console.error("AI Analysis Error:", error);
         // Emergency Fallback
-        const fallback = await simulateAdvancedAnalysis(pitchText, firebaseId);
+        const fallback = await simulateAdvancedAnalysis(pitchText, userId);
         res.json(fallback);
     }
 };
 
-async function simulateAdvancedAnalysis(text, firebaseId = null) {
+async function simulateAdvancedAnalysis(text, userId = null) {
     const lowerText = text.toLowerCase();
     const len = text.length;
 
     let user = null;
-    if (firebaseId) {
+    if (userId) {
         try {
-            user = await prisma.user.findUnique({ where: { firebaseId } });
+            const { data } = await supabaseAdmin
+                .from('users')
+                .select('name')
+                .eq('id', userId)
+                .single();
+            user = data;
         } catch (e) {
             console.error("User fetch error:", e);
         }
@@ -102,13 +106,13 @@ async function simulateAdvancedAnalysis(text, firebaseId = null) {
     const clarity = Math.min(score - 10, 95);
     const investorAppeal = Math.min(score - 5, 95);
 
-    // Generate a significantly longer script (~300 words)
+    // Generate a script
     const scriptSections = [
-        `[0:00] Good morning judges and fellow entrepreneurs. My name is ${user?.name || 'Priya'} and I'm here to introduce a revolution in our sector. Most people look at the current market and see problems, but we saw a massive, untapped opportunity to empower thousands through our unique solution.`,
-        `[0:30] The core of our innovation lies in how we handle the existing fragmentation. Currently, users struggle with complexity and lack of support, leading to massive inefficiencies. Our platform aggregates these needs into a seamless interface that reduces friction by 70%. Imagine a world where this barrier simply doesn't exist anymore.`,
-        `[1:00] Let's talk about the numbers because that's where the real excitement is. We're targeting a total addressable market of ₹5,000 Crores. Our pilot program in Tamil Nadu has already shown that retention is at an all-time high of 85%. This isn't just a concept; it's a proven model ready for regional expansion.`,
-        `[1:30] Our team brings over 20 years of combined experience in tech and operations. We've weathered the storms of startup life and we know exactly what it takes to scale this to the next level. We're not just building a product; we're building a sustainable ecosystem for the long term.`,
-        `[2:00] In conclusion, we are seeking an investment to help us reach 100,000 users by the end of this year. We invite you to join us on this journey to change the face of our industry. Thank you for your time and I look forward to your questions during the Q&A session.`
+        `[0:00] Good morning judges. My name is ${user?.name || 'Priya'} and I'm here to introduce a revolution...`,
+        `[0:30] The core of our innovation lies in how we handle the existing fragmentation...`,
+        `[1:00] We're targeting a total addressable market of ₹5,000 Crores...`,
+        `[1:30] Our team brings over 20 years of combined experience...`,
+        `[2:00] In conclusion, we are seeking an investment to help us reach 100,000 users...`
     ];
 
     return {
@@ -116,31 +120,20 @@ async function simulateAdvancedAnalysis(text, firebaseId = null) {
         marketFit: Math.round(marketFit),
         clarity: Math.round(clarity),
         investorAppeal: Math.round(investorAppeal),
-        refinedText: text.length > 50 ? text.substring(0, Math.min(text.length, 300)) + " (Optimized for clarity and impact by AI)..." : text,
+        refinedText: text.length > 50 ? text.substring(0, Math.min(text.length, 300)) + "..." : text,
         improvements: [
-            score < 70 ? "Your problem statement is too technical. Simplify for a broader investment committee." : "Deepen your competitive moat analysis.",
-            "Add detailed unit economics for the recurring revenue model.",
-            "Include a slide on your Go-To-Market strategy for rural segments."
+            score < 70 ? "Your problem statement is too technical." : "Deepen your competitive moat analysis.",
+            "Add detailed unit economics.",
+            "Include a slide on GTM strategy."
         ],
         slides: [
-            { title: "The Vision", content: "Empowering the next generation of women leaders through technology and community." },
-            { title: "Market Gap", content: "Identifying the ₹5000Cr void in regional business support systems." },
-            { title: "The Hero Solution", content: "A mobile-first platform designed for accessibility and high-trust interactions." },
-            { title: "Deep Dive: TAM/SAM", content: "12M potential users in South India alone." },
-            { title: "Monetization Engine", content: "Hybrid SaaS and transaction-fee model with high LTV." },
-            { title: "The Edge", content: "Proprietary datasets and deep community roots in TN." },
-            { title: "Scaling Roadmap", content: "Phase 1: TN & Kerala. Phase 2: Pan-India MSME sectors." },
-            { title: "Leadership", content: "Founding team with exits in EdTech and AgTech." },
-            { title: "Current Traction", content: "5000+ waitlist signups and 3 major MOU partnerships." },
-            { title: "The Opportunity", content: "Seed round open for strategic partners and visionaries." }
+            { title: "The Vision", content: "Empowering the next generation..." },
+            { title: "Market Gap", content: "Identifying the ₹5000Cr void..." }
         ],
         script: scriptSections.join('\n\n'),
         psychologyHeatmap: [
             { section: "Opening Hook", interestLevel: 0.85 },
-            { section: "Problem Validation", interestLevel: 0.65 },
-            { section: "Solution Reveal", interestLevel: 0.92 },
-            { section: "Market potential", interestLevel: 0.78 },
-            { section: "The Ask", interestLevel: 0.95 }
+            { section: "Solution Reveal", interestLevel: 0.92 }
         ]
     };
 }

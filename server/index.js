@@ -1,6 +1,4 @@
 import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
@@ -12,13 +10,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
-});
 
 app.use(cors());
 app.use(express.json());
@@ -33,31 +24,12 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/pitch/analyze', analyzePitch);
-app.get('/api/users/:firebaseId', getUserProfile);
+app.get('/api/users/:userId', getUserProfile);
 app.post('/api/users', createUser);
-app.put('/api/users/:firebaseId', updateProfile);
+app.put('/api/users/:userId', updateProfile);
 app.post('/api/ocr/scan', scanReceipt);
 
-// Socket.io for Community Chat
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
-
-    socket.on('join_room', (room) => {
-        socket.join(room);
-        console.log(`User ${socket.id} joined room: ${room}`);
-    });
-
-    socket.on('send_message', (data) => {
-        // Broadcast to everyone in the room except sender
-        socket.to(data.room).emit('receive_message', data);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
-    });
-});
-
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

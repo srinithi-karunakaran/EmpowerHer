@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { TrendingUp, Zap, Sparkles, Share2, ArrowRight } from 'lucide-react';
+import { TrendingUp, Zap, Sparkles, Share2, ArrowRight, Building2, HeartHandshake } from 'lucide-react';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from '../utils/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '../utils/LanguageContext';
 
 const GrowthToolkit = ({ onBack }) => {
     const { t } = useLanguage();
+    const { user } = useAuth();
     const [activeTab, setActiveTab] = useState('optimizer');
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Optimizer State
     const [optimizerData, setOptimizerData] = useState({
         product: 'Handmade Silk Saree',
         currentPrice: 1250,
@@ -16,8 +22,24 @@ const GrowthToolkit = ({ onBack }) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [postContent, setPostContent] = useState('');
 
+    // Business Data
+    const [businessData, setBusinessData] = useState({
+        business_name: '',
+        sector: '',
+        location: '',
+        revenue: '',
+        stage: 'Startup'
+    });
+
+    // Fundraiser Data
+    const [fundraiserData, setFundraiserData] = useState({
+        title: '',
+        description: '',
+        goal_amount: '',
+        raised_amount: 0
+    });
+
     const handleOptimize = () => {
-        // Mock optimization logic
         setSuggestedPrice(optimizerData.currentPrice + 200);
     };
 
@@ -46,15 +68,27 @@ const GrowthToolkit = ({ onBack }) => {
                 <div className="flex bg-white/5 p-1 rounded-2xl shadow-sm border border-white/10">
                     <button
                         onClick={() => setActiveTab('optimizer')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'optimizer' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'optimizer' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
                     >
-                        Pricing Optimizer
+                        Pricing
                     </button>
                     <button
                         onClick={() => setActiveTab('social')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'social' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'social' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
                     >
                         Social AI
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('business')}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'business' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
+                    >
+                        Onboarding
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('fundraiser')}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-bold transition-all ${activeTab === 'fundraiser' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-text hover:text-primary'}`}
+                    >
+                        Fundraiser
                     </button>
                 </div>
             </div>
@@ -170,7 +204,7 @@ const GrowthToolkit = ({ onBack }) => {
                             </div>
                         </div>
                     </motion.div>
-                ) : (
+                ) : activeTab === 'social' ? (
                     <motion.div
                         key="social"
                         initial={{ opacity: 0, y: 20 }}
@@ -178,6 +212,7 @@ const GrowthToolkit = ({ onBack }) => {
                         exit={{ opacity: 0, y: -20 }}
                         className="max-w-3xl mx-auto"
                     >
+                        {/* Summary: Pre-existing Social AI content preserved here */}
                         <div className="glass p-10 rounded-[3rem] bg-white/[0.03] border border-white/10 text-center">
                             <div className="w-20 h-20 bg-accent/10 rounded-3xl flex items-center justify-center text-accent mx-auto mb-6">
                                 <Share2 size={40} />
@@ -224,6 +259,84 @@ const GrowthToolkit = ({ onBack }) => {
                                 </motion.div>
                             )}
                         </div>
+                    </motion.div>
+                ) : activeTab === 'business' ? (
+                    <motion.div
+                        key="business"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="max-w-4xl mx-auto glass p-8 rounded-[2rem] bg-white/[0.03] border border-white/10"
+                    >
+                        <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                            <Building2 className="text-primary" /> Business Onboarding
+                        </h3>
+                        <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!user) return;
+                            setIsSaving(true);
+                            const { error } = await supabase.from('business_profiles').insert([{ ...businessData, user_id: user.id }]);
+                            setIsSaving(false);
+                            if (error) alert(error.message);
+                            else alert("Business Profile Saved!");
+                        }}>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Business Name</label>
+                                <input type="text" required value={businessData.business_name} onChange={e => setBusinessData({ ...businessData, business_name: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Sector</label>
+                                <input type="text" required value={businessData.sector} onChange={e => setBusinessData({ ...businessData, sector: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Location</label>
+                                <input type="text" required value={businessData.location} onChange={e => setBusinessData({ ...businessData, location: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Annual Revenue (₹)</label>
+                                <input type="number" required value={businessData.revenue} onChange={e => setBusinessData({ ...businessData, revenue: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <div className="md:col-span-2">
+                                <button disabled={isSaving} className="w-full bg-primary text-white py-4 rounded-xl font-bold shadow-lg shadow-primary/20">
+                                    {isSaving ? "Saving..." : "Submit Profile"}
+                                </button>
+                            </div>
+                        </form>
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        key="fundraiser"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="max-w-4xl mx-auto glass p-8 rounded-[2rem] bg-white/[0.03] border border-white/10"
+                    >
+                        <h3 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                            <HeartHandshake className="text-accent" /> Start a Fundraiser
+                        </h3>
+                        <form className="space-y-6" onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!user) return;
+                            setIsSaving(true);
+                            const { error } = await supabase.from('fundraisers').insert([{ ...fundraiserData, user_id: user.id }]);
+                            setIsSaving(false);
+                            if (error) alert(error.message);
+                            else alert("Fundraiser Created!");
+                        }}>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Campaign Title</label>
+                                <input type="text" required value={fundraiserData.title} onChange={e => setFundraiserData({ ...fundraiserData, title: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Description</label>
+                                <textarea required value={fundraiserData.description} onChange={e => setFundraiserData({ ...fundraiserData, description: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 h-32" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-muted-text uppercase">Goal Amount (₹)</label>
+                                <input type="number" required value={fundraiserData.goal_amount} onChange={e => setFundraiserData({ ...fundraiserData, goal_amount: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3" />
+                            </div>
+                            <button disabled={isSaving} className="w-full bg-accent text-white py-4 rounded-xl font-bold shadow-lg shadow-accent/20">
+                                {isSaving ? "Creating..." : "Launch Campaign"}
+                            </button>
+                        </form>
                     </motion.div>
                 )}
             </AnimatePresence>

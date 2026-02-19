@@ -1,19 +1,16 @@
-import prisma from '../lib/prisma.js';
+import { supabaseAdmin } from '../lib/supabaseAdmin.js';
 
 export const getUserProfile = async (req, res) => {
-    const { firebaseId } = req.params;
+    const { userId } = req.params;
 
     try {
-        const user = await prisma.user.findUnique({
-            where: { firebaseId },
-            include: {
-                pitches: true,
-                expenses: true,
-                mentors: true,
-            }
-        });
+        const { data: user, error } = await supabaseAdmin
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
 
-        if (!user) {
+        if (error || !user) {
             return res.status(404).json({ error: "User not found" });
         }
 
@@ -25,18 +22,23 @@ export const getUserProfile = async (req, res) => {
 };
 
 export const createUser = async (req, res) => {
-    const { firebaseId, email, name, industry } = req.body;
+    const { userId, email, name, industry } = req.body;
 
     try {
-        const user = await prisma.user.create({
-            data: {
-                firebaseId,
-                email,
-                name,
-                industry,
-                growthScore: 0
-            }
-        });
+        const { data: user, error } = await supabaseAdmin
+            .from('users')
+            .insert([
+                {
+                    id: userId,
+                    email,
+                    name,
+                    industry
+                }
+            ])
+            .select()
+            .single();
+
+        if (error) throw error;
         res.status(201).json(user);
     } catch (error) {
         console.error("Create User Error:", error);
@@ -45,14 +47,18 @@ export const createUser = async (req, res) => {
 };
 
 export const updateProfile = async (req, res) => {
-    const { firebaseId } = req.params;
+    const { userId } = req.params;
     const data = req.body;
 
     try {
-        const user = await prisma.user.update({
-            where: { firebaseId },
-            data
-        });
+        const { data: user, error } = await supabaseAdmin
+            .from('users')
+            .update(data)
+            .eq('id', userId)
+            .select()
+            .single();
+
+        if (error) throw error;
         res.json(user);
     } catch (error) {
         console.error("Update Profile Error:", error);

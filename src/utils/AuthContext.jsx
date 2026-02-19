@@ -1,83 +1,110 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { createUserApi, getUserProfileApi } from './api';
+import { supabase } from './supabaseClient';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    // Mock user for dev testing to bypass rate limits
+    const [user, setUser] = useState({
+        id: 'demo-user-123',
+        email: 'demo@empowerher.com',
+        name: 'Demo User',
+        displayName: 'Demo User',
+        role: 'ENTREPRENEUR'
+    });
+    const [loading, setLoading] = useState(false);
 
+    /*
     useEffect(() => {
-        const checkAuth = async () => {
-            const savedUser = localStorage.getItem('empowerher_user');
-            if (savedUser) {
-                const parsed = JSON.parse(savedUser);
-                try {
-                    // Sync with backend on mount
-                    const profile = await getUserProfileApi(parsed.firebaseId || parsed.uid);
-                    setUser({ ...parsed, ...profile });
-                } catch (err) {
-                    console.warn("Backend sync failed, using local session");
-                    setUser(parsed);
+        // Check active session
+        const initSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                // Fetch user profile from public.users table
+                const { data: profile, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (profile) {
+                    setUser({ ...session.user, ...profile });
+                } else {
+                    setUser(session.user);
                 }
             }
             setLoading(false);
         };
-        checkAuth();
+
+        initSession();
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session) {
+                const { data: profile } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                setUser({ ...session.user, ...profile });
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
+    */
 
     const login = async (email, password) => {
-        // Mocking login but fetching user record from DB
-        return new Promise((resolve, reject) => {
-            setTimeout(async () => {
-                if (email && password) {
-                    const mockFirebaseId = `user_${btoa(email).slice(0, 10)}`;
-                    try {
-                        const profile = await getUserProfileApi(mockFirebaseId);
-                        const userData = { ...profile, email };
-                        setUser(userData);
-                        localStorage.setItem('empowerher_user', JSON.stringify(userData));
-                        resolve(userData);
-                    } catch (err) {
-                        // Fallback/Demo user
-                        const demoUser = { uid: mockFirebaseId, firebaseId: mockFirebaseId, email, displayName: 'Priya', industry: 'Textiles' };
-                        setUser(demoUser);
-                        localStorage.setItem('empowerher_user', JSON.stringify(demoUser));
-                        resolve(demoUser);
-                    }
-                } else {
-                    reject(new Error('Invalid credentials'));
-                }
-            }, 800);
-        });
-    };
-
-    const signup = async (email, password, name, industry) => {
-        const firebaseId = `user_${Date.now()}`;
-        const userData = {
-            firebaseId,
+        const { data, error } = await supabase.auth.signInWithPassword({
             email,
-            name,
-            industry
-        };
-
-        try {
-            await createUserApi(userData);
-            const userWithDisplayName = { ...userData, uid: firebaseId, displayName: name };
-            setUser(userWithDisplayName);
-            localStorage.setItem('empowerher_user', JSON.stringify(userWithDisplayName));
-            return userWithDisplayName;
-        } catch (err) {
-            console.error("Signup Persistence Error:", err);
-            throw err;
-        }
+            password,
+        });
+        if (error) throw error;
+        return data.user;
     };
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem('empowerher_user');
+    const signup = async (email, password, name, language = 'en') => {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: name,
+                    language: language
+                }
+            }
+        });
+
+        if (error) throw error;
+
+        if (data.user) {
+            // Create user profile in 'users' table
+            const { error: profileError } = await supabase
+                .from('users')
+                .insert([
+                    {
+                        id: data.user.id,
+                        name: name,
+                        email: email,
+                        language: language
+                    }
+                ]);
+
+            if (profileError) console.error("Profile creation error:", profileError);
+        }
+
+        return data.user;
+    };
+
+    const logout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error("Logout error:", error);
     };
 
     const value = { user, login, signup, logout, loading };

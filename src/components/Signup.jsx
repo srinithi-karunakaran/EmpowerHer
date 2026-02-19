@@ -17,9 +17,10 @@ const Signup = ({ onSwitchToLogin }) => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            await signup(formData.email, formData.password, formData.name, formData.industry);
+            await signup(formData.email, formData.password, formData.name);
+            alert("Signup successful! Please check your email for verification.");
         } catch (err) {
-            alert("Signup failed. Please try again.");
+            alert(err.message || "Signup failed. Please try again.");
         } finally {
             setIsLoading(false);
         }
