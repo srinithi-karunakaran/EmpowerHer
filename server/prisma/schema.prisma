@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  role          Role      @default(ENTREPRENEUR)
+  industry      String?
+  location      String?
+  growthScore   Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  pitches       Pitch[]
+  expenses      Expense[]
+  invoices      Invoice[]
+  mentors       User[]    @relation("MentorMatch")
+  mentees       User[]    @relation("MentorMatch")
+}
+
+enum Role {
+  ENTREPRENEUR
+  MENTOR
+  INVESTOR
+}
+
+model Pitch {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  content       String    @db.Text
+  score         Int
+  analysis      Json
+  deckUrl       String?
+  scriptUrl     String?
+  createdAt     DateTime  @default(now())
+}
+
+model Expense {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  title         String
+  amount        Float
+  category      String
+  gstAmount     Float?
+  status        String    @default("Verified")
+  date          DateTime  @default(now())
+  receiptUrl    String?
+}
+
+model Invoice {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  clientName    String
+  amount        Float
+  status        String    @default("Pending")
+  invoiceDate   DateTime  @default(now())
+}
